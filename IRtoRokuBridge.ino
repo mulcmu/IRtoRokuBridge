@@ -6,15 +6,18 @@
  * This gives you a button on the screen labeled Syfy for instance which directly kicks off that app
  * To customize the apps just obtain the appID by selecting the channel and then from a browser get the app id via
  * http://RokuIP:8060/query/active-app (Replace RokuIP with the IP of your device)
+ * 
+ * or use http://RokuIP:8060/query/apps to get all installed apps
+ * 
  * This uses pieces from a number of programs
  * IRremoteESP8266: https://github.com/markszabo/IRremoteESP8266/
  * Telnet Debug https://github.com/JoaoLopesF/ESP8266-RemoteDebug-Telnet
 * To customize
-* 1) Replace the IR reciever pin with yours - II use a nodemcu device with IR reciever and LED attached to D5
-* 2) Replace the Roku IP with your value
-* 3) Update your wifi information
-* 4) Use the existing codes - they are from something in the Harmony datbase called Rikki. if you want to use custom codes find a device that uses NEC codes (you can use IRDump example to confirm encoding)
-* and then via telnet or serial debug press each button to get the code - then update the function for the corresponding cmd.
+* 1) Replace the IR reciever pin with yours 
+* 2) Update the ROKU_BASE_URL with IP address of your Roku
+* 3) Update your wifi information in Secret.h file
+* 4) Configure Harmony remote and update codes below as needed.  I used a Toshiba MW-24FM1 TV/VCR/DVD combo.  It had enough unique LCD soft button commands 
+*    to allow two full screens of app shortcuts.
 * */
 
 #include <IRremoteESP8266.h>
@@ -22,25 +25,34 @@
 #include <ESP8266HTTPClient.h>
 #include <ArduinoOTA.h>
 #include "RemoteDebug.h" 
-IRrecv irrecv(14); //14 is D5 on nodemcu
+#include <IRrecv.h>
+#include <IRutils.h>
+#include "Secret.h"
 
-const char* ssid = "************";
-const char* password = "**************";
+#define ROKU_BASE_URL "http://192.168.0.150:8060"
+
+const char* ssid = WIFI_SSID;
+const char* password = WIFI_PASSWORD;
+
 const long NECRepeat=0xFFFFFFFF;
 int RepeatCount=0;
 String RokuCmd,RokuCmdLastValid;
 long IRCode=0x0;
 
+IRrecv irrecv(14);  //Update IR pin here
 HTTPClient http;
 decode_results results;
 RemoteDebug Debug;
+  
 
 
 void setup()
 {
+
   //Start Serial
   Serial.begin(115200);
   WiFi.begin(ssid, password);
+  WiFi.mode(WIFI_STA);
   Serial.println("Booted");
 
  //Start Debug
@@ -85,70 +97,134 @@ void loop() {
     }
     //Process Cmd
     if ( RokuCmd !="Ignore"){
-      String url = "http://192.168.0.193:8060" + RokuCmd;
+      String url = ROKU_BASE_URL + RokuCmd;
       http.begin(url);
       http.POST("");
       http.end();
+      Serial.println(url);
     }
     irrecv.resume(); // Receive the next value
   } 
   ArduinoOTA.handle(); //This does impact IR reading a bit
   Debug.handle(); //This does impact IR reading a bit
-  delay(20);
+  //delay(20);
 }
+
+//Set Harmony Remote for Roku to be a Toshiba MW-24FM1 TV/VCR/DVD combo.  Looks like NEC repeats
+
 
 void returnCmd(long IRCode){
  switch (IRCode) {
-    case 0xF9708F:
+    case 0x22DDB24D:
       RokuCmd= "/keypress/Right";
       break;
-    case 0xF9609F:
+    case 0x22DD8A75:
        RokuCmd= "/keypress/Left";
        break;
-    case 0xF9C23D:
+    case 0x22DD01FE:
        RokuCmd= "/keypress/Up";
        break;
-    case 0xF950AF:
+    case 0x22DD817E:
        RokuCmd= "/keypress/Down";
        break;
-    case 0xF940BF:
+    case 0x22DD728D:  
        RokuCmd= "/keypress/Select";
        break;
-    case 0xF9F20D:
+    case 0x2FDE817:  //Previous & exit on Harmony remote
        RokuCmd= "/keypress/Back";
        break;
-    case 0xF95AA5:
+    case 0x2FD708F:   //Menu
        RokuCmd= "/keypress/Home";
        break;
-    case 0xF90AF5:
-       RokuCmd= "/keypress/Play";
+    case 0x22DDA857:
+       RokuCmd= "/keypress/Play";  //Play/Pause are the same on roku, harmony play pause and stop all same ir 
        break;
-    case 0xF9B24D:
-       RokuCmd= "/keypress/Play";  //Play/Pause are the same on roku
-       break;
-    case 0xF9C03F:
+    case 0x22DDC837:
        RokuCmd= "/keypress/Fwd";   
        break;
-    case 0xF9E01F:
+    case 0x22DD9867:
        RokuCmd= "/keypress/Rev"; 
        break;
-    case 0xF9926D:
+    case 0x22DD08F7:
        RokuCmd= "/keypress/InstantReplay";
        break;
-    case 0xF9A05F:
-      RokuCmd= "/launch/86398"; //Syfy (see instructions to customize for your setup)
+    case 0x2FD38C7:
+       RokuCmd= "/keypress/Info";  //* ???
+       break;
+    case 0x2FDD827: 
+      RokuCmd= "/keypress/ChannelUp";  
       break;
-    case 0xF98877:
-      RokuCmd= "/launch/35058"; //lifetime (see instructions to customize for your setup - wife watches this don't judge)
+    case 0x2FDF807:    
+      RokuCmd= "/keypress/ChannelDown"; 
       break;
-    case 0xF9906F:
-      RokuCmd= "/launch/34278"; //disney JR (see instructions to customize for your setup)
+    case 0x22DDAF50:           
+      //RokuCmd= "/launch/140474"; //DirectTV Now
+      RokuCmd= "/launch/123132";  //Xfinity App
+      Serial.println("Xfinity");
       break;
-    case 0xF9A857:
-      RokuCmd="/launch/66595"; //nick jr (see instructions to customize for your setup)
+    case 0x22DD8877:                          
+      RokuCmd= "/launch/12";  //Netflix 
+      Serial.println("netflix");
       break;
+    case 0x2FDF00F:         
+      RokuCmd= "/launch/13"; //Amazon
+      Serial.println("a");
+      break;
+    case 0x22DDCA35:                        
+      RokuCmd= "/launch/291097"; //disney +
+      Serial.println("dn");
+      break;
+    case 0x2FD9867:           
+      RokuCmd="/launch/66595"; //nick jr 
+      Serial.println("nj");
+      break;
+    case 0x2FDEA15:           
+      RokuCmd="/launch/28"; //Pandora
+      Serial.println("pan");
+      break;
+    case 0x22DD04FB:           
+      RokuCmd="/launch/837"; //YouTube
+      Serial.println("yt");
+      break;   
+    case 0xA23DCD32:           
+      RokuCmd="/launch/23333"; //PBS Kids
+      Serial.println("pbs");
+      break;
+   case 0x22DDD926:               
+      RokuCmd= "/launch/2213"; //Roku Media Player      
+      Serial.println("usb");
+      break;
+    case 0x22DDB04F:           
+      RokuCmd="/launch/123095"; //Fish Tank
+      Serial.println("fish");
+      break;
+    case 0x22DDE11E:           
+      RokuCmd= "/launch/32828"; //disney now (Mote is still extra3)
+      Serial.println("e3");
+      break;         
+    case 0x22DDFB04:           
+      RokuCmd="Ignore"; //Extra4
+      Serial.println("e4");
+      break; 
+    case 0x2FDA857:           
+      RokuCmd="Ignore"; //Extra5
+      Serial.println("e5");
+      break;         
+    case 0x22DD3AC5:           
+      RokuCmd="Ignore"; //extra6
+      Serial.println("e6");
+      break; 
+    case 0x22DDBA45:           
+      RokuCmd="Ignore"; //extra7
+      Serial.println("e7");
+      break;         
+    case 0x22DD6996:           
+      RokuCmd="Ignore"; //extra8
+      Serial.println("e8");
+      break; 
+       
     default: 
-      Serial.printf("ERROR: No match for code %6X \n", IRCode);
+      Serial.printf("ERROR: No match for code 0x%6X \n", IRCode);
       if (Debug.isActive(Debug.VERBOSE)) {    Debug.printf("IR CODE NOT RECOGNIZED: %8X \n", IRCode);  }
       RokuCmd= "Ignore";
       break;
